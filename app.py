@@ -5,6 +5,9 @@ from werkzeug.security import check_password_hash
 from functools import wraps
 import yaml
 from dateutil import parser
+from urllib.parse import urlencode
+
+
 
 import config
 from kron import (
@@ -300,16 +303,21 @@ def api_delete_job(namespace, job_name):
 @namespace_filter
 @auth.login_required
 def api_get_datadog(namespace, cronjob_name, job_name):
+    url = f"https://app.datadoghq.com/logs?"
+    params = {}
+    params['query'] =f"env:{config.ENVIRONMENT_NAME} service:{cronjob_name}"
+    params['live']='false'
+
     jobs = get_jobs(namespace, cronjob_name)
     for job in jobs:
         if job["metadata"]["name"] == job_name:
-            environmentName = config.ENVIRONMENT_NAME
+            params['query'] =f"env:{config.ENVIRONMENT_NAME} service:{cronjob_name} kube_job:{job_name}"
             padding = 2*60*1000
-            from_ts=int(parser.parse(job['status']['startTime']).timestamp()*1000)-padding
-            to_ts=int(parser.parse(job['status']['completionTime']).timestamp()*1000)+padding
-            query=f"env%3A{environmentName}%20service%3A{cronjob_name}%20kube_job%3A{job_name}"
-            url = f"https://app.datadoghq.com/logs?query={query}&from_ts={from_ts}&to_ts={to_ts}&live=false"
-            return url
-    query=f"env%3A{environmentName}%20service%3A{cronjob_name}"
-    url = f"https://app.datadoghq.com/logs?query={query}"
-    return url
+            if 'startTime' in job['status']:
+                params['from_ts'] =int(parser.parse(job['status']['startTime']).timestamp()*1000)-padding
+            if 'completionTime' in job['status']:
+                params['to_ts'] = int(parser.parse(job['status']['completionTime']).timestamp()*1000)+padding
+            break        
+    query_string = urlencode(params)
+    return url + query_string
+    
