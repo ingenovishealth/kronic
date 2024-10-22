@@ -91,9 +91,9 @@
             <li><code x-text="job.metadata.name"></code>
               <small x-text="'Age: ' + job.status.age"></small>
               <span x-show="job.status.failed" style="color:red">Failed!</span>
-              <a href="#{{cronjob.metadata.name}}-detail"
-                @click="confirm('Are you sure?') ? apiClient('{{namespace}}', 'jobs', job.metadata.name, 'delete', 'POST', '', true) : false;">
-                [delete]</a>
+              <div x-data="{ url: fetchlink('{{namespace}}', '{{cronjob.metadata.name}}', job.metadata.name) }">
+                <a x-bind:href="url" target="_blank">Datadog Logs</a>
+              </div>
             </li>
             <ul>
               <template x-for="pod in job.pods.reverse()">
@@ -164,6 +164,16 @@
         })
 
     )
+  };
+
+  function fetchlink(namespace, cronjobname, jobname) {
+    return (
+      fetch(`/api/namespaces/${namespace}/cronjobs/${cronjobname}/${jobname}/datadog`)
+        .then(res => res.text())
+        .then(data => {
+            return data
+          })
+        )
   };
 </script>
 {% endblock %}

@@ -38,3 +38,5 @@ if NAMESPACE_ONLY:
         sys.exit(1)
 
     ALLOW_NAMESPACES = KRONIC_NAMESPACE
+
+ENVIRONMENT_NAME = os.environ.get("ENVIRONMENT_NAME", None)
