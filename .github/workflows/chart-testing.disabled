@@ -9,7 +9,6 @@ on:
       - '.github/workflows/chart-testing.yaml'
 
 jobs:
-  if: false
   lint-test-chart:
     runs-on: ubuntu-latest
     steps:
