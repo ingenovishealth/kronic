@@ -1,0 +1,22 @@
+name: KRONIC
+'on':
+  workflow_dispatch: {}
+  push:
+    branches:
+    - develop
+    - main
+  
+jobs:
+  docker_python_apps_kronic:
+    name: KRONIC Docker build + upload
+    uses: ./.github/workflows/cw_docker_python.yaml
+    with:
+      docker_repo: ${{ vars.ECR_REGISTRY }}/kronic
+      image_name: kronic
+      work_dir: .
+      docker_context_path: .
+      dockerfile_path: ./Dockerfile
+      runner: buildjet-2vcpu-ubuntu-2204
+    secrets:
+      aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ECR }}
+      aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY_ECR }}

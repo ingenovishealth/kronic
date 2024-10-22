@@ -1,0 +1,93 @@
+name: "[CW] Docker build and upload (backend)"
+on:
+  workflow_call:
+    inputs:
+      docker_repo:
+        description: Docker repo
+        required: true
+        type: string
+      work_dir:
+        description: directory to run docker build in
+        required: true
+        type: string
+      image_name:
+        description: name of the image
+        required: true
+        type: string
+      dockerfile_path:
+        description: Path to the Dockerfile relative to the work_dir
+        required: false
+        type: string
+        default: "./docker/Dockerfile"
+      docker_context_path:
+        required: false
+        description: Path to the Docker build context relative to the work_dir
+        type: string
+        default: "../.."
+      runner:
+        required: true
+        type: string
+
+    secrets:
+      aws_access_key:
+        required: true
+      aws_secret_key:
+        required: true
+      dockerhub_username:
+        required: true
+      dockerhub_password:
+        required: false
+
+jobs:
+  docker_backend:
+    name: "[DOCKER] Build and upload (backend)"
+    timeout-minutes: 30
+    runs-on: ${{ inputs.runner }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.work_dir }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ inputs.docker_repo }}/${{ inputs.image_name }}
+          flavor: |
+            latest=false
+            prefix=
+            suffix=-{{sha}}-{{date 'X'}}
+
+#      - name: Login to Docker Hub
+#        uses: docker/login-action@v3
+#        with:
+#          username: ${{ secrets.dockerhub_username }}
+#          password: ${{ secrets.dockerhub_password }}
+      - uses: aws-actions/configure-aws-credentials@v4
+        name: Configure AWS Credentials
+        with:
+          aws-access-key-id: ${{ secrets.aws_access_key }}
+          aws-secret-access-key: ${{ secrets.aws_secret_key }}
+          aws-region: "us-east-2"
+      - uses: docker/login-action@v3
+        name: Login to ECR
+        with:
+          registry: ${{ inputs.docker_repo }}
+
+      - name: Build docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.work_dir }}/${{ inputs.docker_context_path }}
+          file: ${{ inputs.work_dir }}/${{ inputs.dockerfile_path }}
+          build-args: sentry_release=${{ steps.meta.outputs.version }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
