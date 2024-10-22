@@ -11,7 +11,7 @@ jobs:
     name: KRONIC Docker build + upload
     uses: ./.github/workflows/cw_docker_python.yaml
     with:
-      docker_repo: ${{ vars.ECR_REGISTRY }}/kronic
+      docker_repo: ${{ vars.ECR_REGISTRY }}
       image_name: kronic
       work_dir: .
       docker_context_path: .
