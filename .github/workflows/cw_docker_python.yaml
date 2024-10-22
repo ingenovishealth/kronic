@@ -34,7 +34,7 @@ on:
       aws_secret_key:
         required: true
       dockerhub_username:
-        required: true
+        required: false
       dockerhub_password:
         required: false
 
