@@ -91,9 +91,9 @@
             <li><code x-text="job.metadata.name"></code>
               <small x-text="'Age: ' + job.status.age"></small>
               <span x-show="job.status.failed" style="color:red">Failed!</span>
-              <!--<div x-data="{ url: fetchlink('{{cronjob.metadata.namespace}}', '{{cronjob.metadata.name}}', job.metadata.name) }">
+              <div x-data="{ url: job.status.datadog }">
                 <a x-bind:href="url" target="_blank">Datadog Logs</a>
-              </div>-->
+              </div>
             </li>
             <ul>
               <template x-for="pod in job.pods.reverse()">

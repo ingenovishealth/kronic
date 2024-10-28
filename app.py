@@ -2,16 +2,17 @@ from flask import Flask, request, render_template, redirect
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import check_password_hash
 
+from flask_caching import Cache
+
 from functools import wraps
 import yaml
-from dateutil import parser
-from urllib.parse import urlencode
 
 
 
 import config
 from kron import (
     get_cronjobs,
+    get_cronjobs_detailed,
     get_jobs,
     get_jobs_and_pods,
     get_cronjob,
@@ -27,6 +28,9 @@ from kron import (
 
 app = Flask(__name__, static_url_path="", static_folder="static")
 auth = HTTPBasicAuth()
+
+cache = Cache(config={'CACHE_TYPE': 'SimpleCache', "CACHE_DEFAULT_TIMEOUT": 300})
+cache.init_app(app)
 
 
 @auth.verify_password
@@ -80,6 +84,7 @@ def healthz():
 
 @app.route("/")
 @app.route("/namespaces/")
+@cache.cached()
 @auth.login_required
 def index():
     if config.NAMESPACE_ONLY:
@@ -101,20 +106,19 @@ def index():
 @namespace_filter
 @auth.login_required
 def view_namespace(namespace):
-    cronjobs = get_cronjobs(namespace)
-    cronjobs_with_details = []
-    all_pods = get_pods(namespace=namespace)
-
-    for cronjob in cronjobs:
-        cronjob_detail = get_cronjob(namespace, cronjob["name"])
-        jobs = get_jobs(namespace=namespace, cronjob_name=cronjob["name"])
-        for job in jobs:
-            job["pods"] = [pod for pod in all_pods if pod_is_owned_by(pod, job["metadata"]["name"])]
-        cronjob_detail["jobs"] = jobs
-        cronjobs_with_details.append(cronjob_detail)
+    cronjobs = get_cronjobs_detailed(namespace)
+    #cronjobs_with_details = []
+    #all_pods = get_pods(namespace=namespace)
+    #for cronjob in cronjobs:
+    #    cronjob_detail = get_cronjob(namespace, cronjob["name"])
+    #    jobs = get_jobs(namespace=namespace, cronjob_name=cronjob["name"])
+    #    for job in jobs:
+    #        job["pods"] = [pod for pod in all_pods if pod_is_owned_by(pod, job["metadata"]["name"])]
+    #    cronjob_detail["jobs"] = jobs
+    #    cronjobs_with_details.append(cronjob_detail)
 
     return render_template(
-        "namespace.html", cronjobs=cronjobs_with_details, namespace=namespace
+        "namespace.html", cronjobs=cronjobs, namespace=namespace
     )
 
 
@@ -271,7 +275,7 @@ def api_trigger_cronjob(namespace, cronjob_name):
 @namespace_filter
 @auth.login_required
 def api_get_jobs(namespace, cronjob_name):
-    jobs = get_jobs_and_pods(namespace, cronjob_name)
+    jobs = get_jobs(namespace, cronjob_name)
     return jobs
 
 
@@ -297,27 +301,3 @@ def api_get_pod_logs(namespace, pod_name):
 def api_delete_job(namespace, job_name):
     deleted = delete_job(namespace, job_name)
     return deleted
-
-
-@app.route("/api/namespaces/<namespace>/cronjobs/<cronjob_name>/<job_name>/datadog")
-@namespace_filter
-@auth.login_required
-def api_get_datadog(namespace, cronjob_name, job_name):
-    url = f"https://app.datadoghq.com/logs?"
-    params = {}
-    params['query'] =f"env:{config.ENVIRONMENT_NAME} service:{cronjob_name}"
-    params['live']='false'
-
-    jobs = get_jobs(namespace, cronjob_name)
-    for job in jobs:
-        if job["metadata"]["name"] == job_name:
-            params['query'] =f"env:{config.ENVIRONMENT_NAME} service:{cronjob_name} kube_job:{job_name}"
-            padding = 2*60*1000
-            if 'startTime' in job['status']:
-                params['from_ts'] =int(parser.parse(job['status']['startTime']).timestamp()*1000)-padding
-            if 'completionTime' in job['status']:
-                params['to_ts'] = int(parser.parse(job['status']['completionTime']).timestamp()*1000)+padding
-            break        
-    query_string = urlencode(params)
-    return url + query_string
-    

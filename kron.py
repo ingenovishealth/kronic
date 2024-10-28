@@ -7,6 +7,9 @@ from kubernetes.client.rest import ApiException
 from datetime import datetime, timezone
 from typing import List
 
+from dateutil import parser
+from urllib.parse import urlencode
+
 import config
 
 log = logging.getLogger("app.kron")
@@ -187,6 +190,31 @@ def get_cronjobs(namespace: str = None) -> List[dict]:
         }
         return response
 
+def get_cronjobs_detailed(namespace: str) -> List[dict]:
+    try:
+        cronjobs = [
+            _clean_api_object(item)
+            for item in batch.list_namespaced_cron_job(namespace=namespace).items
+        ]
+    
+        fields = ["name", "namespace"]
+        sorted_cronjobs = sorted(
+            cronjobs, key=lambda x: x["metadata"]["name"]
+        )
+        return sorted_cronjobs
+
+    except ApiException as e:
+        log.error(e)
+        response = {
+            "error": 500,
+            "exception": {
+                "status": e.status,
+                "reason": e.reason,
+                "message": e.body["message"],
+            },
+        }
+        return response
+
 
 @namespace_filter
 def get_cronjob(namespace: str, cronjob_name: str) -> dict:
@@ -230,6 +258,7 @@ def get_jobs(namespace: str, cronjob_name: str) -> List[dict]:
 
         for job in filtered_jobs:
             job["status"]["age"] = _get_time_since(job["status"]["startTime"])
+            job["status"]["datadog"] = get_datadog_link(namespace, cronjob_name, job)
 
         return filtered_jobs
 
@@ -265,7 +294,8 @@ def get_pods(namespace: str, job_name: str = None) -> List[dict]:
         ]
 
         for pod in filtered_pods:
-            pod["status"]["age"] = _get_time_since(pod["status"]["startTime"])
+            if 'startTime' in pod["status"]:
+                pod["status"]["age"] = _get_time_since(pod["status"]["startTime"])
 
         return filtered_pods
 
@@ -472,3 +502,19 @@ def delete_job(namespace: str, job_name: str) -> dict:
             },
         }
         return response
+
+def get_datadog_link(namespace: str, cronjob_name: str, job: dict) -> dict:
+    url = f"https://app.datadoghq.com/logs?"
+    params = {}
+    params['query'] =f"env:{config.ENVIRONMENT_NAME} service:{cronjob_name}"
+    params['live']='false'
+
+    job_name = job["metadata"]["name"]
+    params['query'] =f"env:{config.ENVIRONMENT_NAME} service:{cronjob_name} kube_job:{job_name}"
+    padding = 2*60*1000
+    if 'startTime' in job['status']:
+        params['from_ts'] =int(parser.parse(job['status']['startTime']).timestamp()*1000)-padding
+    if 'completionTime' in job['status']:
+        params['to_ts'] = int(parser.parse(job['status']['completionTime']).timestamp()*1000)+padding
+    query_string = urlencode(params)
+    return url + query_string
