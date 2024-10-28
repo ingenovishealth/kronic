@@ -103,6 +103,7 @@ def index():
 
 
 @app.route("/namespaces/<namespace>")
+@cache.cached()
 @namespace_filter
 @auth.login_required
 def view_namespace(namespace):
@@ -264,6 +265,7 @@ def api_toggle_cronjob_suspend(namespace, cronjob_name):
 def api_trigger_cronjob(namespace, cronjob_name):
     """Manually trigger a job from <cronjob_name>"""
     cronjob = trigger_cronjob(namespace, cronjob_name)
+    cache.delete_memoized(api_get_jobs, namespace, cronjob_name)
     status = 200
     if "error" in cronjob:
         status = cronjob["error"]
@@ -272,6 +274,7 @@ def api_trigger_cronjob(namespace, cronjob_name):
 
 
 @app.route("/api/namespaces/<namespace>/cronjobs/<cronjob_name>/getJobs")
+@cache.memoize()
 @namespace_filter
 @auth.login_required
 def api_get_jobs(namespace, cronjob_name):
